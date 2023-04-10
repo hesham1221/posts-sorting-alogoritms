@@ -1,12 +1,12 @@
-import { users, ads, comments, posts } from "./mockdata";
-import { RankedPost } from "./types";
-
-const myUserId = "1";
-const nonSortedPosts: RankedPost[] = [];
-const sortedPosts: RankedPost[] = [];
-const today = new Date();
 // implement facebook ranking algorithm
 
+import { users, ads, comments, posts } from "./mockdata";
+import { Ad, RankedPost } from "./types";
+
+const myUserId = "5";
+const sortedPosts: RankedPost[] = [];
+const sortedWithAds: (RankedPost | Ad)[] = [];
+const userInterests = users.find((user) => user.id === myUserId)?.interests;
 // 1. Get User from userId
 const myUser = users.find((user) => user.id === myUserId);
 
@@ -46,7 +46,7 @@ const friendsCommentedPosts: RankedPost[] = posts
   });
 
 // 5. Get posts that share interests with user
-const userInterests = users.find((user) => user.id === myUserId)?.interests;
+
 const postsWithSharedInterests: RankedPost[] = posts
   .filter((post) => {
     const postUser = users.find((user) => user.id === post.userId);
@@ -58,24 +58,58 @@ const postsWithSharedInterests: RankedPost[] = posts
     return { ...post, rank: 1 };
   });
 
-// 6. Mix all posts together
-// concat friendsPosts and friendsLikedPosts and increase rank by 1 if repeated post
-const postsWithFriends: RankedPost[] = [];
-for (let i = 0; i < friendsPosts.length; i++) {
-  for (let j = 0; j < friendsLikedPosts.length; j++) {
-    if (friendsPosts[i].id === friendsLikedPosts[j].id) {
-      friendsPosts[i].rank += 1;
-    } else if (
-      postsWithFriends.filter((post) => post.id === friendsLikedPosts[j].id)
-        .length === 0
-    ) {
-      postsWithFriends.push(friendsLikedPosts[j]);
-    }
-  }
-  postsWithFriends.push(friendsPosts[i]);
-}
+// 6. Mix all posts together and sort by rank and createdAt
 
-console.log(postsWithFriends);
+const combinedArr = friendsPosts.concat(
+  friendsLikedPosts,
+  friendsCommentedPosts,
+  postsWithSharedInterests
+);
+
+combinedArr.forEach((obj) => {
+  const existingObj = sortedPosts.find((o) => o.id === obj.id);
+  existingObj ? (existingObj.rank += 1) : sortedPosts.push(obj);
+});
+
+sortedPosts.sort((a, b) => {
+  // Compare by rank first
+  if (a.rank > b.rank) return -1;
+  else if (a.rank < b.rank) return 1;
+
+  // If rank is the same, compare by createdAt
+  if (a.createdAt > b.createdAt) return -1;
+  else if (a.createdAt < b.createdAt) return 1;
+
+  return 0;
+});
+
+// get ads that are relevant to the user
+const relevantAds = ads.filter((ad) => {
+  const data = ad.targetInterests.map(
+    (interest) => userInterests?.includes(interest) && true
+  );
+  return (
+    data.includes(true) &&
+    (myUser
+      ? myUser?.age >= ad.targetAge[0] && myUser?.age <= ad.targetAge[1]
+      : false)
+  );
+});
+
+// insert ads into the sorted posts
+sortedWithAds.push(...sortedPosts);
+const randomIndexs: number[] = [];
+let randomIndex;
+relevantAds.forEach((ad) => {
+  while (true) {
+    randomIndex = Math.floor(Math.random() * (sortedWithAds.length - 1)) + 1;
+    if (!randomIndexs.includes(randomIndex)) break;
+  }
+  sortedWithAds.splice(randomIndex, 0, ad);
+});
+
+console.log(sortedWithAds);
+
 // rules of ranking
 // 1. If a post is liked by a friend, add 1 to the rank
 // 2. If a post is published by a friend, add 1 to the rank
